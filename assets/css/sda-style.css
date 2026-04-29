@@ -1,0 +1,229 @@
+#sda-app {
+    max-width: 1200px;
+}
+
+/* 群組管理 */
+#sda-filter-manager {
+    margin-bottom: 30px;
+}
+
+#sda-group-count {
+    font-weight: normal;
+    color: #666;
+    font-size: 14px;
+}
+
+.sda-group-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    padding: 12px 16px;
+    margin-top: 10px;
+    border-radius: 4px;
+}
+
+.sda-group-info strong {
+    font-size: 15px;
+}
+
+.sda-group-summary {
+    color: #666;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.sda-group-actions .button {
+    margin-left: 4px;
+}
+
+/* Modal */
+#sda-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 40px;
+    overflow-y: auto;
+}
+
+#sda-modal {
+    background: #fff;
+    width: 720px;
+    max-width: 90vw;
+    max-height: 85vh;
+    border-radius: 6px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+}
+
+.sda-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #ddd;
+}
+
+.sda-modal-header h3 {
+    margin: 0;
+}
+
+.sda-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    line-height: 1;
+}
+
+.sda-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.sda-modal-footer {
+    padding: 12px 20px;
+    border-top: 1px solid #ddd;
+    text-align: right;
+}
+
+.sda-modal-footer .button {
+    margin-left: 8px;
+}
+
+/* 欄位 */
+.sda-field-row {
+    margin-bottom: 16px;
+}
+
+.sda-field-row > label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.sda-checkbox-group label {
+    display: inline-block;
+    margin-right: 12px;
+    margin-bottom: 4px;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.sda-checkbox-group label input {
+    margin-right: 3px;
+}
+
+/* 級聯選擇 */
+.sda-cascading-select select {
+    margin-right: 8px;
+    margin-bottom: 8px;
+    min-width: 180px;
+}
+
+.sda-level-2-checkboxes,
+.sda-level-3-checkboxes,
+.sda-area-checkboxes {
+    margin-top: 6px;
+    max-height: 160px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 8px;
+    border-radius: 3px;
+}
+
+.sda-level-2-checkboxes:empty,
+.sda-level-3-checkboxes:empty,
+.sda-area-checkboxes:empty {
+    display: none;
+}
+
+.sda-level-2-checkboxes label,
+.sda-level-3-checkboxes label,
+.sda-area-checkboxes label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.sda-select-all {
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+
+/* 標籤 */
+.sda-selected-tags {
+    margin-top: 6px;
+}
+
+.sda-tag {
+    display: inline-block;
+    background: #e1ecf4;
+    border: 1px solid #a8c7e0;
+    border-radius: 3px;
+    padding: 2px 8px;
+    margin: 2px 4px 2px 0;
+    font-size: 12px;
+}
+
+.sda-tag a {
+    text-decoration: none;
+    color: #666;
+    margin-left: 4px;
+    font-weight: bold;
+}
+
+.sda-tag a:hover {
+    color: #d00;
+}
+
+/* 結果區 */
+#sda-results {
+    margin-top: 20px;
+}
+
+.sda-chart-filter {
+    margin-bottom: 16px;
+}
+
+.sda-chart-filter select {
+    min-width: 180px;
+}
+
+#sda-chart-container {
+    max-width: 500px;
+    margin-bottom: 20px;
+}
+
+/* 使用者連結 */
+.sda-user-link {
+    text-decoration: none;
+    color: #0073aa;
+}
+
+.sda-user-link:hover {
+    color: #006799;
+    text-decoration: underline;
+}
+
+#sda-back-to-users {
+    text-decoration: none;
+}
+
+/* 群組名稱輸入 */
+#sda-group-name {
+    width: 100%;
+    max-width: 400px;
+}
