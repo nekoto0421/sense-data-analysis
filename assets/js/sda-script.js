@@ -703,14 +703,14 @@
                 var $tbody = $('#sda-user-table tbody');
                 $tbody.empty();
                 if (res.data.users.length === 0) {
-                    $tbody.append('<tr><td>無符合條件的使用者</td></tr>');
+                    $tbody.append('<tr><td colspan="2">無符合條件的使用者</td></tr>');
                 } else {
                     res.data.users.forEach(function(u) {
                         var label = u.user_email;
                         if (u.display_name && u.display_name !== u.user_email) {
                             label = u.user_email + '(' + u.display_name + ')';
                         }
-                        $tbody.append('<tr><td><a href="#" class="sda-user-link" data-user-id="' + u.ID + '">' + escHtml(label) + '</a></td></tr>');
+                        $tbody.append('<tr><td><a href="#" class="sda-user-link" data-user-id="' + u.ID + '">' + escHtml(label) + '</a></td><td>' + (u.order_count || 0) + '</td></tr>');
                     });
                 }
             }

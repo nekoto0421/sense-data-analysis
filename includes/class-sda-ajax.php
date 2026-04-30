@@ -225,7 +225,7 @@ class SDA_Ajax {
 
                 // 用 wc_order_product_lookup 高效查找包含這些商品的訂單客戶
                 if (!$has_order_filter) {
-                    $join .= " INNER JOIN {$prefix}wc_orders o_pk ON o_pk.customer_id = m.id AND o_pk.type = 'shop_order' AND o_pk.status IN ('wc-completed','wc-processing')";
+                    $join .= " INNER JOIN {$prefix}wc_orders o_pk ON o_pk.customer_id = m.id AND o_pk.type = 'shop_order' AND o_pk.status = 'wc-completed'";
                     $pk_order_alias = "o_pk";
                 } else {
                     $pk_order_alias = "o";
@@ -271,12 +271,14 @@ class SDA_Ajax {
         $user_ids = $wpdb->get_col($sql);
         $db_error = $wpdb->last_error;
 
-        // 取得使用者名稱
+        // 取得使用者名稱及訂單數
         $users = [];
         if ($user_ids) {
             $id_placeholders = implode(',', array_fill(0, count($user_ids), '%d'));
             $users = $wpdb->get_results($wpdb->prepare(
-                "SELECT ID, display_name, user_email FROM {$prefix}users WHERE ID IN ($id_placeholders)",
+                "SELECT u.ID, u.display_name, u.user_email,
+                        (SELECT COUNT(*) FROM {$prefix}wc_orders wo WHERE wo.customer_id = u.ID AND wo.type = 'shop_order' AND wo.status = 'wc-completed') AS order_count
+                 FROM {$prefix}users u WHERE u.ID IN ($id_placeholders)",
                 $user_ids
             ));
         }
