@@ -206,6 +206,34 @@ class SDA_Ajax {
             $join .= " INNER JOIN {$prefix}wc_orders o ON o.customer_id = m.id AND o.type = 'shop_order' AND o.status IN ('wc-completed','wc-processing')";
         }
 
+        // 商品關鍵字（模糊比對商品名稱，含變化商品）
+        if (!empty($filters['product_keywords']) && is_array($filters['product_keywords'])) {
+            $keywords = array_slice($filters['product_keywords'], 0, 5); // 最多5組
+            // 先查出符合關鍵字的商品 ID（含父商品+變化商品）
+            $like_conditions = [];
+            foreach ($keywords as $kw) {
+                $kw = trim($kw);
+                if ($kw === '') continue;
+                $like_conditions[] = $wpdb->prepare("p.post_title LIKE %s", '%' . $wpdb->esc_like($kw) . '%');
+            }
+            if ($like_conditions) {
+                // 找出匹配的商品 ID（simple + variable parent）
+                $product_sql = "SELECT p.ID FROM {$prefix}posts p WHERE p.post_type IN ('product','product_variation') AND p.post_status = 'publish' AND (" . implode(' OR ', $like_conditions) . ")";
+                // 也找出以匹配商品為父商品的變化商品
+                $variation_sql = "SELECT v.ID FROM {$prefix}posts v WHERE v.post_type = 'product_variation' AND v.post_parent IN ({$product_sql})";
+                $all_product_ids_sql = "({$product_sql}) UNION ({$variation_sql})";
+
+                // 用 wc_order_product_lookup 高效查找包含這些商品的訂單客戶
+                if (!$has_order_filter) {
+                    $join .= " INNER JOIN {$prefix}wc_orders o_pk ON o_pk.customer_id = m.id AND o_pk.type = 'shop_order' AND o_pk.status IN ('wc-completed','wc-processing')";
+                    $pk_order_alias = "o_pk";
+                } else {
+                    $pk_order_alias = "o";
+                }
+                $join .= " INNER JOIN {$prefix}wc_order_product_lookup opl ON opl.order_id = {$pk_order_alias}.id AND opl.product_id IN ({$all_product_ids_sql})";
+            }
+        }
+
         // 得知管道、購買原因、課程用途 (存在訂單 post_meta)
         $meta_filters = [
             'source' => '_custom_source',
@@ -272,10 +300,33 @@ class SDA_Ajax {
         $user_id = intval($_POST['user_id'] ?? 0);
         if (!$user_id) wp_send_json_error('Invalid user ID');
 
+        // 商品關鍵字（用於 highlight）
+        $keywords = json_decode(stripslashes($_POST['product_keywords'] ?? '[]'), true);
+        $matched_order_ids = [];
+        if (is_array($keywords) && count($keywords)) {
+            $keywords = array_slice(array_filter(array_map('trim', $keywords)), 0, 5);
+            if ($keywords) {
+                $like_conditions = [];
+                foreach ($keywords as $kw) {
+                    $like_conditions[] = $wpdb->prepare("p.post_title LIKE %s", '%' . $wpdb->esc_like($kw) . '%');
+                }
+                $product_sql = "SELECT p.ID FROM {$prefix}posts p WHERE p.post_type IN ('product','product_variation') AND p.post_status = 'publish' AND (" . implode(' OR ', $like_conditions) . ")";
+                $variation_sql = "SELECT v.ID FROM {$prefix}posts v WHERE v.post_type = 'product_variation' AND v.post_parent IN ({$product_sql})";
+                $all_product_ids_sql = "({$product_sql}) UNION ({$variation_sql})";
+
+                $matched_order_ids = $wpdb->get_col(
+                    "SELECT DISTINCT opl.order_id FROM {$prefix}wc_order_product_lookup opl
+                     INNER JOIN {$prefix}wc_orders o ON o.id = opl.order_id AND o.customer_id = {$user_id} AND o.type = 'shop_order'
+                     WHERE opl.product_id IN ({$all_product_ids_sql})"
+                );
+                $matched_order_ids = array_map('intval', $matched_order_ids);
+            }
+        }
+
         $orders = $wpdb->get_results($wpdb->prepare(
             "SELECT id, date_created_gmt, total_amount, status
              FROM {$prefix}wc_orders
-             WHERE customer_id = %d AND type = 'shop_order'
+             WHERE customer_id = %d AND type = 'shop_order' AND status = 'wc-completed'
              ORDER BY date_created_gmt DESC",
             $user_id
         ));
@@ -292,11 +343,12 @@ class SDA_Ajax {
                 'wc-failed'     => '失敗',
             ];
             $result[] = [
-                'id'     => $order->id,
-                'date'   => $order->date_created_gmt ? date('Y-m-d', strtotime($order->date_created_gmt)) : '',
-                'total'  => number_format((float)$order->total_amount, 0),
-                'status' => $status_labels[$order->status] ?? $order->status,
-                'url'    => admin_url('post.php?post=' . $order->id . '&action=edit'),
+                'id'      => $order->id,
+                'date'    => $order->date_created_gmt ? date('Y-m-d', strtotime($order->date_created_gmt)) : '',
+                'total'   => number_format((float)$order->total_amount, 0),
+                'status'  => $status_labels[$order->status] ?? $order->status,
+                'url'     => admin_url('post.php?post=' . $order->id . '&action=edit'),
+                'matched' => in_array((int)$order->id, $matched_order_ids, true),
             ];
         }
 

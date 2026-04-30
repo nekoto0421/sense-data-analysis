@@ -308,13 +308,35 @@
             });
         });
 
-        // 圓餅圖維度選擇
+        // 商品關鍵字 - 新增
+        $(document).on('click', '.sda-add-keyword', function() {
+            var $container = $('#sda-product-keywords');
+            if ($container.find('.sda-keyword-row').length >= 5) {
+                alert('最多只能新增 5 組關鍵字');
+                return;
+            }
+            $container.append('<div class="sda-keyword-row"><input type="text" class="sda-product-keyword" placeholder="輸入商品關鍵字"> <a href="#" class="sda-keyword-remove">×</a></div>');
+        });
+
+        // 商品關鍵字 - 移除
+        $(document).on('click', '.sda-keyword-remove', function(e) {
+            e.preventDefault();
+            $(this).closest('.sda-keyword-row').remove();
+        });
+
+        // 圖表維度/類型選擇
         $('#sda-chart-dimension').on('change', function() {
             var dim = $(this).val();
             if (!dim || !filteredUserIds.length) {
                 $('#sda-chart-container').hide();
                 return;
             }
+            loadChartData(dim);
+        });
+
+        $('#sda-chart-type').on('change', function() {
+            var dim = $('#sda-chart-dimension').val();
+            if (!dim || !filteredUserIds.length) return;
             loadChartData(dim);
         });
 
@@ -404,6 +426,8 @@
         selectedJobs = [];
         selectedTests = [];
         selectedCities = [];
+        // 清空商品關鍵字
+        $('#sda-product-keywords').html('<div class="sda-keyword-row"><input type="text" class="sda-product-keyword" placeholder="輸入商品關鍵字"></div>');
     }
 
     function collectFilters() {
@@ -470,6 +494,14 @@
         if ($('[data-filter="has_order"] input:checked').length) {
             filters.has_order = true;
         }
+
+        // 商品關鍵字
+        var keywords = [];
+        $('.sda-product-keyword').each(function() {
+            var v = $.trim($(this).val());
+            if (v) keywords.push(v);
+        });
+        if (keywords.length) filters.product_keywords = keywords;
 
         return filters;
     }
@@ -556,6 +588,7 @@
         if (filters.reason) parts.push('原因: ' + filters.reason.length + '項');
         if (filters.usage) parts.push('用途: ' + filters.usage.length + '項');
         if (filters.has_order) parts.push('僅有購買');
+        if (filters.product_keywords) parts.push('商品: ' + filters.product_keywords.join(', '));
         return parts.length ? parts.join(' | ') : '無條件';
     }
 
@@ -629,6 +662,16 @@
             updateTags('city');
         }
 
+        // 商品關鍵字
+        if (f.product_keywords && f.product_keywords.length) {
+            var $container = $('#sda-product-keywords');
+            $container.empty();
+            f.product_keywords.forEach(function(kw, i) {
+                var removeBtn = i === 0 ? '' : ' <a href="#" class="sda-keyword-remove">×</a>';
+                $container.append('<div class="sda-keyword-row"><input type="text" class="sda-product-keyword" placeholder="輸入商品關鍵字" value="' + escHtml(kw) + '">' + removeBtn + '</div>');
+            });
+        }
+
         $('#sda-modal-overlay').show();
     }
 
@@ -679,16 +722,24 @@
         $('#sda-user-list-container').hide();
         $('#sda-order-list-container').show();
 
+        // 取得當前群組的商品關鍵字
+        var keywords = [];
+        if (currentGroupIndex >= 0 && filterGroups[currentGroupIndex] && filterGroups[currentGroupIndex].filters.product_keywords) {
+            keywords = filterGroups[currentGroupIndex].filters.product_keywords;
+        }
+
         $.post(sdaAjax.ajaxurl, {
             action: 'sda_get_user_orders',
             nonce: sdaAjax.nonce,
-            user_id: userId
+            user_id: userId,
+            product_keywords: JSON.stringify(keywords)
         }, function(res) {
             var $tbody = $('#sda-order-table tbody');
             $tbody.empty();
             if (res.success && res.data.length) {
                 res.data.forEach(function(order) {
-                    $tbody.append('<tr>' +
+                    var rowClass = order.matched ? ' class="sda-order-matched"' : '';
+                    $tbody.append('<tr' + rowClass + '>' +
                         '<td>#' + order.id + '</td>' +
                         '<td>' + escHtml(order.date) + '</td>' +
                         '<td>$' + escHtml(order.total) + '</td>' +
@@ -710,14 +761,15 @@
             user_ids: JSON.stringify(filteredUserIds)
         }, function(res) {
             if (res.success) {
-                renderPieChart(res.data.labels, res.data.values);
+                renderChart(res.data.labels, res.data.values);
             }
         });
     }
 
-    function renderPieChart(labels, values) {
+    function renderChart(labels, values) {
         $('#sda-chart-container').show();
         var ctx = document.getElementById('sda-pie-chart').getContext('2d');
+        var chartType = $('#sda-chart-type').val() || 'pie';
 
         if (pieChart) pieChart.destroy();
 
@@ -727,8 +779,31 @@
             '#46BFBD','#FDB45C','#949FB1','#4D5360','#AC64AD'
         ];
 
+        var chartOptions = {
+            responsive: true,
+            plugins: {
+                legend: { display: chartType === 'pie', position: 'right' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                            var pct = ((context.parsed.y || context.parsed) / total * 100).toFixed(1);
+                            var val = context.parsed.y !== undefined ? context.parsed.y : context.parsed;
+                            return context.label + ': ' + val + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            }
+        };
+
+        if (chartType === 'bar') {
+            chartOptions.scales = {
+                y: { beginAtZero: true, ticks: { precision: 0 } }
+            };
+        }
+
         pieChart = new Chart(ctx, {
-            type: 'pie',
+            type: chartType,
             data: {
                 labels: labels,
                 datasets: [{
@@ -736,21 +811,7 @@
                     backgroundColor: colors.slice(0, labels.length),
                 }]
             },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'right' },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
-                                var pct = ((context.parsed / total) * 100).toFixed(1);
-                                return context.label + ': ' + context.parsed + ' (' + pct + '%)';
-                            }
-                        }
-                    }
-                }
-            }
+            options: chartOptions
         });
     }
 

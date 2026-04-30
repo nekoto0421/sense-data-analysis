@@ -134,6 +134,15 @@ class SDA_Admin {
                             <div class="sda-checkbox-group" data-filter="usage" id="sda-usage-options"></div>
                         </div>
 
+                        <!-- 商品關鍵字 -->
+                        <div class="sda-field-row">
+                            <label>商品關鍵字（模糊比對訂單商品名稱，最多5組）</label>
+                            <div id="sda-product-keywords">
+                                <div class="sda-keyword-row"><input type="text" class="sda-product-keyword" placeholder="輸入商品關鍵字"></div>
+                            </div>
+                            <button type="button" class="button sda-add-keyword">＋ 新增關鍵字</button>
+                        </div>
+
                         <!-- 是否購買 -->
                         <div class="sda-field-row">
                             <label>是否購買</label>
@@ -167,6 +176,11 @@ class SDA_Admin {
                         <option value="source">得知管道</option>
                         <option value="reason">購買原因</option>
                         <option value="usage">課程用途</option>
+                    </select>
+                    <label style="margin-left:16px;">圖表類型：</label>
+                    <select id="sda-chart-type">
+                        <option value="pie">圓餅圖</option>
+                        <option value="bar">長條圖</option>
                     </select>
                 </div>
 

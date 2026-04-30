@@ -189,9 +189,43 @@
     color: #d00;
 }
 
+/* 商品關鍵字 */
+.sda-keyword-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.sda-keyword-row input {
+    flex: 1;
+    max-width: 300px;
+}
+
+.sda-keyword-remove {
+    color: #d00;
+    text-decoration: none;
+    font-size: 18px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.sda-keyword-remove:hover {
+    color: #a00;
+}
+
+.sda-add-keyword {
+    margin-top: 4px;
+}
+
 /* 結果區 */
 #sda-results {
     margin-top: 20px;
+}
+
+/* 訂單 highlight */
+.sda-order-matched {
+    background-color: #fff3cd !important;
 }
 
 .sda-chart-filter {
