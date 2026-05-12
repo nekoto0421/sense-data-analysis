@@ -680,6 +680,7 @@
         var group = filterGroups[idx];
         $('#sda-result-group-name').text(group.name);
         $('#sda-chart-dimension').val('');
+        $('#sda-chart-dimension option.sda-keyword-dim').remove();
         $('#sda-chart-container').hide();
         $('#sda-order-list-container').hide();
         $('#sda-user-list-container').show();
@@ -700,17 +701,41 @@
             if (res.success) {
                 filteredUserIds = res.data.users.map(function(u) { return u.ID; });
                 $('#sda-user-count').text(res.data.count);
+                var hasKeywords = !!res.data.has_keywords;
+                var colCount = hasKeywords ? 3 : 2;
+                $('#sda-product-col-th').toggle(hasKeywords);
+                // 動態產生商品關鍵字圖表維度選項
+                $('#sda-chart-dimension option.sda-keyword-dim').remove();
+                if (res.data.product_keywords && res.data.product_keywords.length) {
+                    var $dimSelect = $('#sda-chart-dimension');
+                    res.data.product_keywords.forEach(function(kw) {
+                        $('<option>').addClass('sda-keyword-dim')
+                            .val('product_keyword:' + kw)
+                            .text('商品數量分析(' + kw + ')')
+                            .appendTo($dimSelect);
+                    });
+                }
                 var $tbody = $('#sda-user-table tbody');
                 $tbody.empty();
                 if (res.data.users.length === 0) {
-                    $tbody.append('<tr><td colspan="2">無符合條件的使用者</td></tr>');
+                    $tbody.append('<tr><td colspan="' + colCount + '">無符合條件的使用者</td></tr>');
                 } else {
                     res.data.users.forEach(function(u) {
                         var label = u.user_email;
                         if (u.display_name && u.display_name !== u.user_email) {
                             label = u.user_email + '(' + u.display_name + ')';
                         }
-                        $tbody.append('<tr><td><a href="#" class="sda-user-link" data-user-id="' + u.ID + '">' + escHtml(label) + '</a></td><td>' + (u.order_count || 0) + '</td></tr>');
+                        var productTd = '';
+                        if (hasKeywords) {
+                            var productHtml = '';
+                            if (u.product_breakdown && u.product_breakdown.length) {
+                                productHtml = u.product_breakdown.map(function(p, i) {
+                                    return (i + 1) + '. ' + escHtml(p.name) + ' &times;' + p.qty;
+                                }).join('<br>');
+                            }
+                            productTd = '<td>' + productHtml + '</td>';
+                        }
+                        $tbody.append('<tr><td><a href="#" class="sda-user-link" data-user-id="' + u.ID + '">' + escHtml(label) + '</a></td><td>' + (u.order_count || 0) + '</td>' + productTd + '</tr>');
                     });
                 }
             }
@@ -766,6 +791,18 @@
         });
     }
 
+    // 將長字串折成多行（每行最多 maxLen 個字元）
+    function wrapLabel(str, maxLen) {
+        maxLen = maxLen || 10;
+        var lines = [];
+        while (str.length > maxLen) {
+            lines.push(str.slice(0, maxLen));
+            str = str.slice(maxLen);
+        }
+        if (str.length) lines.push(str);
+        return lines.length > 1 ? lines : str; // 單行回傳字串，多行回傳陣列
+    }
+
     function renderChart(labels, values) {
         $('#sda-chart-container').show();
         var ctx = document.getElementById('sda-pie-chart').getContext('2d');
@@ -779,33 +816,107 @@
             '#46BFBD','#FDB45C','#949FB1','#4D5360','#AC64AD'
         ];
 
+        // 長條圖：把標籤折行；圓餅圖：完整名稱（圖例在下方有足夠寬度）
+        var chartLabels = chartType === 'bar'
+            ? labels.map(function(l) { return wrapLabel(l, 8); })
+            : labels;
+
+        // 計算長條圖 x 軸標籤最多幾行（用來估底部空間）
+        var maxLabelLines = 1;
+        if (chartType === 'bar') {
+            chartLabels.forEach(function(l) {
+                var lines = Array.isArray(l) ? l.length : 1;
+                if (lines > maxLabelLines) maxLabelLines = lines;
+            });
+        }
+
+        // 動態容器高度
+        var itemCount = labels.length;
+        var containerHeight;
+        if (chartType === 'bar') {
+            // 圖表主體 + 頂部 datalabels 空間 + 底部標籤空間
+            containerHeight = Math.max(400, itemCount * 60) + maxLabelLines * 20 + 60;
+        } else {
+            // 圓餅圖：主體固定 360px + 下方圖例（每行約 24px，每行放 2 個）
+            var legendRows = Math.ceil(itemCount / 2);
+            containerHeight = 360 + legendRows * 28 + 60;
+        }
+        $('#sda-chart-container').height(containerHeight);
+
         var chartOptions = {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
-                legend: { display: chartType === 'pie', position: 'right' },
+                legend: {
+                    display: chartType === 'pie',
+                    position: 'bottom',           // 移至下方，讓圖例獲得完整寬度
+                    labels: {
+                        boxWidth: 14,
+                        padding: 10,
+                        font: { size: 12 }
+                    }
+                },
                 tooltip: {
                     callbacks: {
+                        // tooltip 永遠顯示完整名稱
+                        title: function(items) { return labels[items[0].dataIndex]; },
                         label: function(context) {
                             var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
-                            var pct = ((context.parsed.y || context.parsed) / total * 100).toFixed(1);
                             var val = context.parsed.y !== undefined ? context.parsed.y : context.parsed;
-                            return context.label + ': ' + val + ' (' + pct + '%)';
+                            var pct = (val / total * 100).toFixed(1);
+                            return val + ' (' + pct + '%)';
                         }
                     }
+                },
+                datalabels: {
+                    color: function(context) {
+                        return context.chart.config.type === 'pie' ? '#fff' : '#333';
+                    },
+                    font: { weight: 'bold', size: 11 },
+                    formatter: function(value, context) {
+                        var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                        var pct = (value / total * 100).toFixed(1);
+                        return value + '\n(' + pct + '%)';
+                    },
+                    anchor: function(context) {
+                        return context.chart.config.type === 'pie' ? 'center' : 'end';
+                    },
+                    align: function(context) {
+                        return context.chart.config.type === 'pie' ? 'center' : 'top';
+                    },
+                    // 圓餅圖：佔比 < 5% 不顯示避免疊字
+                    display: function(context) {
+                        var val = context.dataset.data[context.dataIndex];
+                        if (!val) return false;
+                        if (context.chart.config.type !== 'pie') return true;
+                        var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                        return (val / total) >= 0.05;
+                    },
+                    clamp: true,
+                    clip: false
                 }
             }
         };
 
         if (chartType === 'bar') {
             chartOptions.scales = {
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 0,
+                        autoSkip: false
+                    }
+                },
                 y: { beginAtZero: true, ticks: { precision: 0 } }
             };
+            chartOptions.layout = { padding: { top: 55, bottom: maxLabelLines * 20 } };
         }
 
         pieChart = new Chart(ctx, {
             type: chartType,
+            plugins: [ChartDataLabels],
             data: {
-                labels: labels,
+                labels: chartLabels,
                 datasets: [{
                     data: values,
                     backgroundColor: colors.slice(0, labels.length),

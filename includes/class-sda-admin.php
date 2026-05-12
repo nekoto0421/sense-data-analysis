@@ -20,7 +20,8 @@ class SDA_Admin {
 
         wp_enqueue_style('sda-style', SDA_PLUGIN_URL . 'assets/css/sda-style.css', [], '1.0.0');
         wp_enqueue_script('chart-js', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js', [], '4.4.0', true);
-        wp_enqueue_script('sda-script', SDA_PLUGIN_URL . 'assets/js/sda-script.js', ['jquery', 'chart-js'], '1.0.0', true);
+        wp_enqueue_script('chart-datalabels', 'https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js', ['chart-js'], '2.2.0', true);
+        wp_enqueue_script('sda-script', SDA_PLUGIN_URL . 'assets/js/sda-script.js', ['jquery', 'chart-js', 'chart-datalabels'], '1.0.0', true);
         wp_localize_script('sda-script', 'sdaAjax', [
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce'   => wp_create_nonce('sda_nonce'),
@@ -185,14 +186,14 @@ class SDA_Admin {
                 </div>
 
                 <div id="sda-chart-container" style="display:none;">
-                    <canvas id="sda-pie-chart" width="400" height="400"></canvas>
+                    <canvas id="sda-pie-chart"></canvas>
                 </div>
 
                 <!-- 使用者清單 -->
                 <div id="sda-user-list-container">
                     <h3>使用者清單 (<span id="sda-user-count">0</span>)</h3>
                     <table class="wp-list-table widefat fixed striped" id="sda-user-table">
-                        <thead><tr><th>使用者名稱</th><th style="width:100px;">訂單數</th></tr></thead>
+                        <thead><tr><th>使用者名稱</th><th style="width:80px;">訂單數</th><th id="sda-product-col-th">購買商品</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>

@@ -207,8 +207,11 @@ class SDA_Ajax {
         }
 
         // 商品關鍵字（模糊比對商品名稱，含變化商品）
+        $all_product_ids_sql = null; // 供後續明細查詢使用
+        $filter_keywords = [];          // 供回傳前端產生圖表維度選項
         if (!empty($filters['product_keywords']) && is_array($filters['product_keywords'])) {
-            $keywords = array_slice($filters['product_keywords'], 0, 5); // 最多5組
+            $keywords        = array_slice($filters['product_keywords'], 0, 5); // 最多5組
+            $filter_keywords = $keywords;
             // 先查出符合關鍵字的商品 ID（含父商品+變化商品）
             $like_conditions = [];
             foreach ($keywords as $kw) {
@@ -277,17 +280,50 @@ class SDA_Ajax {
             $id_placeholders = implode(',', array_fill(0, count($user_ids), '%d'));
             $users = $wpdb->get_results($wpdb->prepare(
                 "SELECT u.ID, u.display_name, u.user_email,
-                        (SELECT COUNT(*) FROM {$prefix}wc_orders wo WHERE wo.customer_id = u.ID AND wo.type = 'shop_order' AND wo.status = 'wc-completed') AS order_count
-                 FROM {$prefix}users u WHERE u.ID IN ($id_placeholders)",
+                        (SELECT COUNT(*) FROM {$prefix}wc_orders wo WHERE wo.customer_id = u.ID AND wo.type = 'shop_order' AND wo.status IN ('wc-completed','wc-processing')) AS order_count
+                 FROM {$prefix}users u WHERE u.ID IN ($id_placeholders)
+                 HAVING order_count > 0",
                 $user_ids
             ));
         }
 
+        // 若有商品關鍵字，查詢各使用者購買的符合商品明細（合併變化商品至父商品名稱）
+        if (!empty($all_product_ids_sql) && $user_ids) {
+            $id_list = implode(',', array_map('intval', $user_ids));
+            $breakdown_rows = $wpdb->get_results(
+                "SELECT
+                    o.customer_id,
+                    COALESCE(pp.post_title, p.post_title) AS product_name,
+                    SUM(opl.product_qty) AS qty
+                 FROM {$prefix}wc_order_product_lookup opl
+                 INNER JOIN {$prefix}wc_orders o ON o.id = opl.order_id AND o.type = 'shop_order' AND o.status IN ('wc-completed','wc-processing')
+                 INNER JOIN {$prefix}posts p ON p.ID = opl.product_id
+                 LEFT JOIN {$prefix}posts pp ON pp.ID = p.post_parent
+                 WHERE o.customer_id IN ({$id_list})
+                   AND opl.product_id IN ({$all_product_ids_sql})
+                 GROUP BY o.customer_id, COALESCE(pp.post_title, p.post_title)
+                 ORDER BY o.customer_id, qty DESC"
+            );
+            $breakdown_map = [];
+            foreach ($breakdown_rows as $row) {
+                $breakdown_map[$row->customer_id][] = [
+                    'name' => $row->product_name,
+                    'qty'  => intval($row->qty),
+                ];
+            }
+            foreach ($users as &$user) {
+                $user->product_breakdown = $breakdown_map[$user->ID] ?? [];
+            }
+            unset($user);
+        }
+
         wp_send_json_success([
-            'users'     => $users,
-            'count'     => count($user_ids),
-            'debug_sql' => $sql,
-            'db_error'  => $db_error,
+            'users'            => $users,
+            'count'            => count($user_ids),
+            'has_keywords'     => !empty($all_product_ids_sql),
+            'product_keywords' => $filter_keywords,
+            'debug_sql'        => $sql,
+            'db_error'         => $db_error,
         ]);
     }
 
@@ -328,7 +364,7 @@ class SDA_Ajax {
         $orders = $wpdb->get_results($wpdb->prepare(
             "SELECT id, date_created_gmt, total_amount, status
              FROM {$prefix}wc_orders
-             WHERE customer_id = %d AND type = 'shop_order' AND status = 'wc-completed'
+             WHERE customer_id = %d AND type = 'shop_order' AND status IN ('wc-completed','wc-processing')
              ORDER BY date_created_gmt DESC",
             $user_id
         ));
@@ -495,7 +531,34 @@ class SDA_Ajax {
                 break;
 
             default:
-                wp_send_json_error('Invalid dimension');
+                if (strpos($dimension, 'product_keyword:') === 0) {
+                    $kw  = sanitize_text_field(substr($dimension, strlen('product_keyword:')));
+                    $like = '%' . $wpdb->esc_like($kw) . '%';
+                    $product_ids_sql = $wpdb->prepare(
+                        "SELECT p.ID FROM {$prefix}posts p WHERE p.post_type IN ('product','product_variation') AND p.post_status = 'publish' AND p.post_title LIKE %s",
+                        $like
+                    );
+                    $variation_sql = "SELECT v.ID FROM {$prefix}posts v WHERE v.post_type = 'product_variation' AND v.post_parent IN ({$product_ids_sql})";
+                    $all_ids_sql   = "({$product_ids_sql}) UNION ({$variation_sql})";
+                    $id_list       = implode(',', $user_ids);
+                    $rows = $wpdb->get_results(
+                        "SELECT COALESCE(pp.post_title, p.post_title) AS label, SUM(opl.product_qty) AS cnt
+                         FROM {$prefix}wc_order_product_lookup opl
+                         INNER JOIN {$prefix}wc_orders o ON o.id = opl.order_id AND o.type = 'shop_order' AND o.status IN ('wc-completed','wc-processing')
+                         INNER JOIN {$prefix}posts p ON p.ID = opl.product_id
+                         LEFT JOIN {$prefix}posts pp ON pp.ID = p.post_parent AND pp.post_type = 'product'
+                         WHERE o.customer_id IN ({$id_list})
+                           AND opl.product_id IN ({$all_ids_sql})
+                         GROUP BY COALESCE(pp.ID, p.ID), COALESCE(pp.post_title, p.post_title)
+                         ORDER BY cnt DESC"
+                    );
+                    foreach ($rows as $r) {
+                        $labels[] = $r->label;
+                        $values[] = (int)$r->cnt;
+                    }
+                } else {
+                    wp_send_json_error('Invalid dimension');
+                }
         }
 
         wp_send_json_success([
