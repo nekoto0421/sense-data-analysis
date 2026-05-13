@@ -702,8 +702,9 @@
                 filteredUserIds = res.data.users.map(function(u) { return u.ID; });
                 $('#sda-user-count').text(res.data.count);
                 var hasKeywords = !!res.data.has_keywords;
-                var colCount = hasKeywords ? 3 : 2;
+                var colCount = hasKeywords ? 4 : 2;
                 $('#sda-product-col-th').toggle(hasKeywords);
+                $('#sda-variation-col-th').toggle(hasKeywords);
                 // 動態產生商品關鍵字圖表維度選項
                 $('#sda-chart-dimension option.sda-keyword-dim').remove();
                 if (res.data.product_keywords && res.data.product_keywords.length) {
@@ -726,16 +727,20 @@
                             label = u.user_email + '(' + u.display_name + ')';
                         }
                         var productTd = '';
+                        var variationTd = '';
                         if (hasKeywords) {
                             var productHtml = '';
+                            var variationHtml = '';
                             if (u.product_breakdown && u.product_breakdown.length) {
-                                productHtml = u.product_breakdown.map(function(p, i) {
-                                    return (i + 1) + '. ' + escHtml(p.name) + ' &times;' + p.qty;
-                                }).join('<br>');
+                                u.product_breakdown.forEach(function(p, i) {
+                                    productHtml  += (i > 0 ? '<br>' : '') + (i + 1) + '. ' + escHtml(p.name) + ' &times;' + p.qty;
+                                    variationHtml += (i > 0 ? '<br>' : '') + (i + 1) + '. ' + escHtml(p.variation || '');
+                                });
                             }
-                            productTd = '<td>' + productHtml + '</td>';
+                            productTd   = '<td>' + productHtml + '</td>';
+                            variationTd = '<td>' + variationHtml + '</td>';
                         }
-                        $tbody.append('<tr><td><a href="#" class="sda-user-link" data-user-id="' + u.ID + '">' + escHtml(label) + '</a></td><td>' + (u.order_count || 0) + '</td>' + productTd + '</tr>');
+                        $tbody.append('<tr><td><a href="#" class="sda-user-link" data-user-id="' + u.ID + '">' + escHtml(label) + '</a></td><td>' + (u.order_count || 0) + '</td>' + productTd + variationTd + '</tr>');
                     });
                 }
             }

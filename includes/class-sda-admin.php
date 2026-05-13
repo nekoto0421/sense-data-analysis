@@ -193,7 +193,7 @@ class SDA_Admin {
                 <div id="sda-user-list-container">
                     <h3>使用者清單 (<span id="sda-user-count">0</span>)</h3>
                     <table class="wp-list-table widefat fixed striped" id="sda-user-table">
-                        <thead><tr><th>使用者名稱</th><th style="width:80px;">訂單數</th><th id="sda-product-col-th">購買商品</th></tr></thead>
+                        <thead><tr><th>使用者名稱</th><th style="width:80px;">訂單數</th><th id="sda-product-col-th">購買商品</th><th id="sda-variation-col-th">變化選項</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>

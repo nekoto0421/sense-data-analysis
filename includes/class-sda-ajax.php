@@ -287,28 +287,69 @@ class SDA_Ajax {
             ));
         }
 
-        // 若有商品關鍵字，查詢各使用者購買的符合商品明細（合併變化商品至父商品名稱）
+        // 若有商品關鍵字，查詢各使用者購買的符合商品明細
+        // opl.product_id = 父商品ID；opl.variation_id = 變化商品ID（簡單商品為0）
         if (!empty($all_product_ids_sql) && $user_ids) {
             $id_list = implode(',', array_map('intval', $user_ids));
             $breakdown_rows = $wpdb->get_results(
                 "SELECT
                     o.customer_id,
-                    COALESCE(pp.post_title, p.post_title) AS product_name,
+                    opl.product_id,
+                    opl.variation_id,
+                    p.post_title AS product_name,
                     SUM(opl.product_qty) AS qty
                  FROM {$prefix}wc_order_product_lookup opl
                  INNER JOIN {$prefix}wc_orders o ON o.id = opl.order_id AND o.type = 'shop_order' AND o.status IN ('wc-completed','wc-processing')
                  INNER JOIN {$prefix}posts p ON p.ID = opl.product_id
-                 LEFT JOIN {$prefix}posts pp ON pp.ID = p.post_parent
                  WHERE o.customer_id IN ({$id_list})
                    AND opl.product_id IN ({$all_product_ids_sql})
-                 GROUP BY o.customer_id, COALESCE(pp.post_title, p.post_title)
+                 GROUP BY o.customer_id, opl.product_id, opl.variation_id
                  ORDER BY o.customer_id, qty DESC"
             );
+
+            // 批次取得所有變化商品（variation_id > 0）的屬性
+            $var_ids = array_values(array_unique(array_filter(
+                array_map(function($r) { return intval($r->variation_id) > 0 ? intval($r->variation_id) : 0; }, $breakdown_rows)
+            )));
+            $attr_map = [];
+            if ($var_ids) {
+                $v_placeholders = implode(',', $var_ids);
+                // 全域屬性 pa_*：meta_value 是 term slug，需轉換為 term name
+                $global_attr_rows = $wpdb->get_results(
+                    "SELECT pm.post_id, t.name AS attr_value
+                     FROM {$prefix}postmeta pm
+                     INNER JOIN {$prefix}term_taxonomy tt ON tt.taxonomy = SUBSTR(pm.meta_key, 11)
+                     INNER JOIN {$prefix}terms t ON t.term_id = tt.term_id AND t.slug = pm.meta_value
+                     WHERE pm.post_id IN ({$v_placeholders}) AND pm.meta_key LIKE 'attribute_pa_%'"
+                );
+                foreach ($global_attr_rows as $ar) {
+                    $attr_map[$ar->post_id][] = $ar->attr_value;
+                }
+                // 自訂屬性（含 course-variation-tab 的 URL-encode key）：meta_value 即顯示文字
+                $custom_attr_rows = $wpdb->get_results(
+                    "SELECT post_id, meta_value AS attr_value
+                     FROM {$prefix}postmeta
+                     WHERE post_id IN ({$v_placeholders})
+                       AND meta_key LIKE 'attribute_%'
+                       AND meta_key NOT LIKE 'attribute_pa_%'
+                       AND meta_value != ''"
+                );
+                foreach ($custom_attr_rows as $ar) {
+                    $attr_map[$ar->post_id][] = $ar->attr_value;
+                }
+            }
+
             $breakdown_map = [];
             foreach ($breakdown_rows as $row) {
+                $var_id    = intval($row->variation_id);
+                $variation = '';
+                if ($var_id > 0 && !empty($attr_map[$var_id])) {
+                    $variation = implode('/', array_unique($attr_map[$var_id]));
+                }
                 $breakdown_map[$row->customer_id][] = [
-                    'name' => $row->product_name,
-                    'qty'  => intval($row->qty),
+                    'name'      => $row->product_name,
+                    'qty'       => intval($row->qty),
+                    'variation' => $variation,
                 ];
             }
             foreach ($users as &$user) {
